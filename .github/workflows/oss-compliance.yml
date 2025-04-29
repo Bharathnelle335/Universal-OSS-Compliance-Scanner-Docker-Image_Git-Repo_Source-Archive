@@ -21,10 +21,9 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install SCANOSS + Syft + Python libs
+      - name: Install SCANOSS, Syft, and Excel dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --user scanoss pandas openpyxl
+          pip install --user scanoss pandas openpyxl
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
@@ -38,25 +37,23 @@ jobs:
           tar -xf docker-output/image.tar -C docker-output
           find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
 
-      - name: Run SCANOSS on image filesystem
-        run: python3 -m scanoss.cli scan -o scanoss-results.json docker-output/extracted-rootfs
+      - name: Run SCANOSS scan on extracted filesystem
+        run: scanoss scan -o scanoss-results.json docker-output/extracted-rootfs
 
       - name: Generate SBOM with Syft
         run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
 
-      - name: Generate Compliance Excel Reports
+      - name: Generate Excel Compliance Reports
         run: |
           python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json
 
       - name: Upload Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: docker-oss-results
           path: |
+            syft-sbom.spdx.json
+            scanoss-results.json
             compliance_merged_report.xlsx
             syft_components_report.xlsx
             scanoss_components_report.xlsx
-            syft-sbom.spdx.json
-            scanoss-results.json
-      
-      
