@@ -46,7 +46,10 @@ jobs:
 
       - name: Generate Excel Compliance Reports
         run: |
-          python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json
+            python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json
+
+      - name: List generated files
+        run: ls -lh *.xlsx *.json || true
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
