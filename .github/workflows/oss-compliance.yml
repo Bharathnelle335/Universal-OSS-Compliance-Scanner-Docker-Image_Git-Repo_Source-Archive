@@ -47,10 +47,7 @@ jobs:
           python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json
 
       - name: Upload Results
-        uses: actions/upload-artifact@v3  # ✅ stable version
-        # Alternate options if needed:
-        # uses: actions/upload-artifact@v3.1.2
-        # uses: actions/upload-artifact@v2.3.1
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: docker-oss-results
           path: |
@@ -59,3 +56,4 @@ jobs:
             scanoss_components_report.xlsx
             syft-sbom.spdx.json
             scanoss-results.json
+      
