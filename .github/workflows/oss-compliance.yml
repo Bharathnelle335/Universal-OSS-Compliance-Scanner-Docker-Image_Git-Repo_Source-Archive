@@ -24,10 +24,10 @@ jobs:
       - name: Install SCANOSS + Syft + Python libs
         run: |
           python3 -m pip install --upgrade pip
-          pip install --user scanoss pandas openpyxl
+          python3 -m pip install --user scanoss pandas openpyxl
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-
+      
       - name: Pull Docker image
         run: docker pull ${{ github.event.inputs.docker_image }}
 
