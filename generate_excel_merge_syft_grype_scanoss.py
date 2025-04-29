@@ -11,6 +11,8 @@ scanoss_file = sys.argv[3]
 # Output file names
 excel_out = "compliance_merged_report.xlsx"
 json_out = "compliance_merged_report.json"
+grype_excel = "grype_components_report.xlsx"
+scanoss_excel = "scanoss_components_report.xlsx"
 
 def parse_syft(filepath):
     with open(filepath, 'r') as f:
@@ -31,6 +33,7 @@ def parse_grype(filepath):
     with open(filepath, 'r') as f:
         data = json.load(f)
     licenses = defaultdict(str)
+    grype_rows = []
     for match in data.get("matches", []):
         pkg = match.get("artifact", {})
         name = pkg.get("name")
@@ -39,7 +42,13 @@ def parse_grype(filepath):
         if name and version:
             key = f"{name}@{version}"
             licenses[key] = license
-    return licenses
+            grype_rows.append({
+                "component": name,
+                "version": version,
+                "source": "grype",
+                "license": license
+            })
+    return licenses, grype_rows
 
 def parse_scanoss(filepath):
     try:
@@ -61,23 +70,26 @@ def parse_scanoss(filepath):
     except Exception:
         return []
 
-# Parse inputs
 syft_components = parse_syft(syft_file)
-grype_licenses = parse_grype(grype_file)
+grype_licenses, grype_components = parse_grype(grype_file)
 scanoss_components = parse_scanoss(scanoss_file)
 
-# Enrich syft with Grype license info
 for comp in syft_components:
     key = f"{comp['component']}@{comp['version']}"
     comp["license"] = grype_licenses.get(key)
 
-# Combine all
+# Merge for final report
 merged = syft_components + scanoss_components
 
-# Output to Excel + JSON
-df = pd.DataFrame(merged)
-df.drop_duplicates(subset=["component", "version", "license"], inplace=True)
-df.to_excel(excel_out, index=False)
-df.to_json(json_out, orient="records", indent=2)
+# Create DataFrames
+df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license"])
+df_grype = pd.DataFrame(grype_components).drop_duplicates()
+df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
 
-print(f"✅ Exported: {excel_out}, {json_out}, total components: {len(df)}")
+# Export to files
+df_merged.to_excel(excel_out, index=False)
+df_merged.to_json(json_out, orient="records", indent=2)
+df_grype.to_excel(grype_excel, index=False)
+df_scanoss.to_excel(scanoss_excel, index=False)
+
+print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")
