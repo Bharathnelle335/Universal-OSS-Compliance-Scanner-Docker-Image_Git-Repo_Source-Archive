@@ -21,9 +21,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install required tools (SCANOSS, Syft, Excel libs)
+      - name: Install SCANOSS + Syft + Python libs
         run: |
+          python3 -m pip install --upgrade pip
           pip install scanoss pandas openpyxl
+          echo "SCANOSS version:"
+          python3 -m scanoss --version
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Pull Docker image
@@ -37,7 +40,7 @@ jobs:
           find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
 
       - name: Run SCANOSS on image filesystem
-        run: scanoss scan -o scanoss-results.json docker-output/extracted-rootfs
+        run: python3 -m scanoss scan -o scanoss-results.json docker-output/extracted-rootfs
 
       - name: Generate SBOM with Syft
         run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
