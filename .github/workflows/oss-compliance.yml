@@ -62,3 +62,5 @@ jobs:
             scanoss-results.json
             compliance_merged_report.xlsx
             compliance_merged_report.json
+            grype_components_report.xlsx
+            scanoss_components_report.xlsx
