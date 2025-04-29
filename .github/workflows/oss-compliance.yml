@@ -27,7 +27,7 @@ jobs:
           python3 -m pip install --user scanoss pandas openpyxl
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-      
+
       - name: Pull Docker image
         run: docker pull ${{ github.event.inputs.docker_image }}
 
@@ -39,7 +39,7 @@ jobs:
           find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
 
       - name: Run SCANOSS on image filesystem
-        run: scanoss scan -o scanoss-results.json docker-output/extracted-rootfs
+        run: python3 -m scanoss.cli scan -o scanoss-results.json docker-output/extracted-rootfs
 
       - name: Generate SBOM with Syft
         run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
