@@ -1,102 +1,77 @@
-"""
-generate_excel_merge_syft_scanoss.py
-Version: 1.1.0
-Universal merger of Syft SBOM and SCANOSS results to Excel
-Supports: Java (Maven, Gradle), NodeJS, Python, Go, C, etc.
-"""
-
-import pandas as pd
-import json
 import sys
-import os
+import json
+import pandas as pd
+from collections import defaultdict
 
-def load_syft_sbom(syft_file):
-    with open(syft_file, 'r', encoding='utf-8') as f:
-        syft_data = json.load(f)
+syft_file = sys.argv[1]
+grype_file = sys.argv[2]
+scanoss_file = sys.argv[3]
 
+excel_out = "compliance_merged_report.xlsx"
+json_out = "compliance_merged_report.json"
+
+def parse_syft(filepath):
+    with open(filepath, 'r') as f:
+        data = json.load(f)
     components = []
-    for package in syft_data.get("packages", []):
-        name = package.get("name", "Unknown")
-        version = package.get("version", "Unknown")
-        license_info = "Unknown"
-        homepage = "N/A"
-
-        if "licenseConcluded" in package:
-            license_info = package["licenseConcluded"]
-        elif "foundLicenses" in package and package["foundLicenses"]:
-            license_info = package["foundLicenses"][0]
-
-        if "homepage" in package and package["homepage"]:
-            homepage = package["homepage"]
-
+    for item in data.get("packages", []):
+        name = item.get("name")
+        version = item.get("versionInfo") or item.get("version")
         components.append({
-            "Name": name,
-            "Version": version,
-            "License": license_info,
-            "License URL": homepage
+            "component": name,
+            "version": version,
+            "source": "syft",
+            "license": None
         })
-
     return components
 
-def load_scanoss_results(scanoss_file):
-    with open(scanoss_file, 'r', encoding='utf-8') as f:
-        scanoss_data = json.load(f)
+def parse_grype(filepath):
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    licenses = defaultdict(str)
+    for match in data.get("matches", []):
+        pkg = match.get("artifact", {})
+        name = pkg.get("name")
+        version = pkg.get("version")
+        license = pkg.get("license") or match.get("vulnerability", {}).get("license")
+        if name and version:
+            key = f"{name}@{version}"
+            licenses[key] = license
+    return licenses
 
-    components = []
+def parse_scanoss(filepath):
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        matched = []
+        for entry in data:
+            for match in entry.get("matches", []):
+                component = match.get("component")
+                license = match.get("licenses", [{}])[0].get("name")
+                if component:
+                    matched.append({
+                        "component": component,
+                        "version": None,
+                        "source": "scanoss",
+                        "license": license
+                    })
+        return matched
+    except Exception:
+        return []
 
-    for file_path, matches in scanoss_data.items():
-        for match in matches:
-            name = match.get("component", "Unknown")
-            version = match.get("version", "Unknown")
+syft_components = parse_syft(syft_file)
+grype_licenses = parse_grype(grype_file)
+scanoss_components = parse_scanoss(scanoss_file)
 
-            # License Handling
-            license_info = "Unknown"
-            license_url = "N/A"
-            licenses = match.get("licenses", [])
-            if licenses and isinstance(licenses, list):
-                license_info = licenses[0].get("name", "Unknown")
-                license_url = licenses[0].get("url", "N/A")
+for comp in syft_components:
+    key = f"{comp['component']}@{comp['version']}"
+    comp["license"] = grype_licenses.get(key)
 
-            components.append({
-                "Name": name,
-                "Version": version,
-                "License": license_info,
-                "License URL": license_url
-            })
+merged = syft_components + scanoss_components
 
-    return components
+df = pd.DataFrame(merged)
+df.drop_duplicates(subset=["component", "version", "license"], inplace=True)
+df.to_excel(excel_out, index=False)
+df.to_json(json_out, orient="records", indent=2)
 
-def main(syft_sbom_path, scanoss_result_path):
-    syft_components = load_syft_sbom(syft_sbom_path)
-    scanoss_components = load_scanoss_results(scanoss_result_path)
-
-    syft_df = pd.DataFrame(syft_components)
-    scanoss_df = pd.DataFrame(scanoss_components)
-
-    syft_df.to_excel("syft-compliance-report.xlsx", index=False)
-    scanoss_df.to_excel("scanoss-compliance-report.xlsx", index=False)
-
-    merged_df = pd.concat([syft_df, scanoss_df], ignore_index=True).drop_duplicates()
-    merged_df.to_excel("compliance-report.xlsx", index=False)
-
-    print("✅ Excel reports generated successfully:")
-    print("- compliance-report.xlsx")
-    print("- syft-compliance-report.xlsx")
-    print("- scanoss-compliance-report.xlsx")
-
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json")
-        sys.exit(1)
-
-    syft_sbom_path = sys.argv[1]
-    scanoss_result_path = sys.argv[2]
-
-    if not os.path.exists(syft_sbom_path):
-        print(f"Error: {syft_sbom_path} not found.")
-        sys.exit(1)
-    if not os.path.exists(scanoss_result_path):
-        print(f"Error: {scanoss_result_path} not found.")
-        sys.exit(1)
-
-    main(syft_sbom_path, scanoss_result_path)
+print(f"Exported: {excel_out}, {json_out}, Total: {len(df)} components")

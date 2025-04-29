@@ -1,4 +1,4 @@
-name: Docker OSS Compliance (Syft + SCANOSS)
+name: Docker OSS Compliance (Syft + Grype + SCANOSS)
 
 on:
   workflow_dispatch:
@@ -21,12 +21,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install SCANOSS, Syft, and Excel libraries
+      - name: Install SCANOSS, Syft, Grype, and Excel dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install --user scanoss pandas openpyxl
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Pull Docker image
         run: docker pull ${{ github.event.inputs.docker_image }}
@@ -44,21 +45,20 @@ jobs:
       - name: Generate SBOM with Syft
         run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
 
-      - name: Generate Excel Compliance Reports
+      - name: Run Grype scan
+        run: grype ${{ github.event.inputs.docker_image }} -o json > grype-scan.json
+
+      - name: Merge outputs and generate Excel report
         run: |
-            python3 generate_excel_merge_syft_scanoss.py syft-sbom.spdx.json scanoss-results.json
+          python3 generate_excel_merge_syft_grype_scanoss.py syft-sbom.spdx.json grype-scan.json scanoss-results.json
 
-      - name: List generated files
-        run: ls -lh *.xlsx *.json || true
-
-      - name: Upload Results
+      - name: Upload Compliance Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: docker-oss-results
           path: |
-            ./compliance-report.xlsx
-            ./syft-compliance-report.xlsx
-            ./scanoss-compliance-report.xlsx
-            ./syft-sbom.spdx.json
-            ./scanoss-results.json
-      
+            syft-sbom.spdx.json
+            grype-scan.json
+            scanoss-results.json
+            compliance_merged_report.xlsx
+            compliance_merged_report.json
