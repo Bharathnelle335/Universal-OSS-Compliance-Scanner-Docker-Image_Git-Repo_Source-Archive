@@ -80,9 +80,9 @@ def parse_scanoss(filepath):
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
-        components = {}
-        for file_path, entries in data.items():
-            for match in entries:
+        matched = []
+        for entry in data:
+            for match in entry.get("matches", []):
                 component = match.get("component")
                 version = match.get("version") or match.get("latest")
                 license_entry = match.get("licenses", [{}])[0]
@@ -90,18 +90,16 @@ def parse_scanoss(filepath):
                 license_url = license_entry.get("url", "unknown")
 
                 if component:
-                    key = f"{component}@{version or 'unknown'}"
-                    if key not in components:
-                        components[key] = {
-                            "component": component,
-                            "version": version,
-                            "source": "scanoss",
-                            "license": license_name,
-                            "license_source": "scanoss",
-                            "enriched_license": None,
-                            "license_url": license_url or "unknown"
-                        }
-        return list(components.values())
+                    matched.append({
+                        "component": component,
+                        "version": version,
+                        "source": "scanoss",
+                        "license": license_name,
+                        "license_source": "scanoss",
+                        "enriched_license": None,
+                        "license_url": license_url or "unknown"
+                    })
+        return matched
     except Exception as e:
         print(f"Error parsing SCANOSS: {e}")
         return []
