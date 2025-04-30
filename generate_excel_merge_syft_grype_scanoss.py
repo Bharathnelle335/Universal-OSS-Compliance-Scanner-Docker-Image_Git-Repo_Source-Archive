@@ -77,28 +77,33 @@ def parse_grype(filepath):
 def parse_scanoss(filepath):
     if not os.path.exists(filepath):
         return []
+
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
+
         matched = []
-        for file_path, matches in data.items():
-            for match in matches:
+        for entry_list in data.values():
+            for match in entry_list:
                 component = match.get("component")
-                licenses = match.get("licenses", [])
-                license = licenses[0].get("name") if licenses else None
-                if component:
+                license_objs = match.get("licenses", [])
+                license_names = [lic.get("name") for lic in license_objs if "name" in lic]
+                license_combined = ", ".join(license_names) if license_names else None
+
+                if component and license_combined:
                     matched.append({
                         "component": component,
-                        "version": match.get("version"),
+                        "version": match.get("version") or None,
                         "source": "scanoss",
-                        "license": license,
+                        "license": license_combined,
                         "license_source": "scanoss",
                         "enriched_license": None,
-                        "license_url": match.get("url", "unknown")
+                        "license_url": match.get("url") or "unknown"
                     })
+
         return matched
     except Exception as e:
-        print(f"❌ Error parsing scanoss file: {e}")
+        print(f"[ERROR] Failed to parse SCANOSS JSON: {e}")
         return []
 
 
