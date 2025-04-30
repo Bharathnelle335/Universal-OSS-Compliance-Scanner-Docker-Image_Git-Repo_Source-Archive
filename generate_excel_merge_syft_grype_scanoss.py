@@ -6,11 +6,13 @@ import requests
 import time
 import re
 
+# Input arguments
 syft_file = sys.argv[1]
 grype_file = sys.argv[2]
 scanoss_file = sys.argv[3]
-image_name = re.sub(r'[^a-zA-Z0-9]+', '_', sys.argv[4]).strip('_')  # sanitize for file use
+image_name = sys.argv[4].replace(':', '_').replace('/', '_').replace('@', '_')  # Simplified and safe
 
+# Output file names with Docker image name prefix
 excel_out = f"{image_name}_compliance_merged_report.xlsx"
 json_out = f"{image_name}_compliance_merged_report.json"
 grype_excel = f"{image_name}_grype_components_report.xlsx"
