@@ -64,3 +64,5 @@ jobs:
             compliance_merged_report.json
             grype_components_report.xlsx
             scanoss_components_report.xlsx
+            syft_components_report.xlsx
+
