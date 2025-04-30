@@ -58,12 +58,12 @@ jobs:
         with:
           name: docker-oss-results
           path: |
-            syft-sbom.spdx.json
+            *_compliance_merged_report.xlsx
+            *_compliance_merged_report.json
+            *_grype_components_report.xlsx
+            *_scanoss_components_report.xlsx
+            *_syft_components_report.xlsx
             grype-scan.json
+            syft-sbom.spdx.json
             scanoss-results.json
-            compliance_merged_report.xlsx
-            compliance_merged_report.json
-            grype_components_report.xlsx
-            scanoss_components_report.xlsx
-            syft_components_report.xlsx
 
