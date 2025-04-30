@@ -148,4 +148,4 @@ df_merged.to_json(json_out, orient="records", indent=2)
 df_grype.to_excel(grype_excel, index=False)
 df_scanoss.to_excel(scanoss_excel, index=False)
 
-print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")s
+print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")
