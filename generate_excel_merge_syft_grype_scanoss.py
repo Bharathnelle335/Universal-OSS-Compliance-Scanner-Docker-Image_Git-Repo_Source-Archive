@@ -99,6 +99,7 @@ def parse_scanoss(filepath):
                         "enriched_license": None,
                         "license_url": license_url or "unknown"
                     })
+        print(f"SCANOSS components parsed: {len(matched)}")
         return matched
     except Exception as e:
         print(f"Error parsing SCANOSS: {e}")
@@ -168,7 +169,10 @@ if grype_components:
 
 if scanoss_components:
     df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
-    df_scanoss.to_excel(scanoss_excel, index=False)
+else:
+    df_scanoss = pd.DataFrame(columns=["component", "version", "license", "license_source", "enriched_license", "license_url"])
+
+df_scanoss.to_excel(scanoss_excel, index=False)
 
 if syft_components:
     df_syft = pd.DataFrame(syft_components)[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
