@@ -7,7 +7,7 @@ import time
 import re
 import os
 
-# Determine scan source identifier (docker image or git URL)
+# Determine scan source identifier (docker image or git URL or tar/zip upload)
 image_name = os.getenv("IMAGE_NAME", "scan").replace(":", "_").replace("/", "_").replace("@", "_")
 
 # File names
