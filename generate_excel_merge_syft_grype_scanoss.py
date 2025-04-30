@@ -28,6 +28,7 @@ def parse_syft(filepath):
             "source": "syft",
             "license": license,
             "license_source": "syft" if license else "",
+            "enriched_license": None,
             "license_url": "unknown"
         })
     return components
@@ -52,6 +53,7 @@ def parse_grype(filepath):
                 "source": "grype",
                 "license": license,
                 "license_source": "grype",
+                "enriched_license": None,
                 "license_url": "unknown"
             })
     return licenses, grype_rows
@@ -72,6 +74,7 @@ def parse_scanoss(filepath):
                         "source": "scanoss",
                         "license": license,
                         "license_source": "scanoss",
+                        "enriched_license": None,
                         "license_url": "unknown"
                     })
         return matched
@@ -90,7 +93,7 @@ def enrich_license(component):
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
             data = r.json()
-            return data.get("license", {}).get("spdx_id"), "github", url
+            return data.get("license", {}).get("spdx_id"), url
     except: pass
 
     # Try NPM
@@ -101,7 +104,7 @@ def enrich_license(component):
         if r.status_code == 200:
             data = r.json()
             license = data.get("license")
-            return license, "npm", url
+            return license, url
     except: pass
 
     # Try PyPI
@@ -112,10 +115,10 @@ def enrich_license(component):
         if r.status_code == 200:
             data = r.json()
             license = data.get("info", {}).get("license")
-            return license, "pypi", url
+            return license, url
     except: pass
 
-    return None, "unknown", "unknown"
+    return None, "unknown"
 
 syft_components = parse_syft(syft_file)
 grype_licenses, grype_components = parse_grype(grype_file)
@@ -126,16 +129,16 @@ for comp in syft_components:
     if not comp["license"] and key in grype_licenses:
         comp["license"] = grype_licenses[key]
         comp["license_source"] = "grype"
-    if not comp["license"]:
-        license, source, license_url = enrich_license(comp)
-        comp["license"] = license
-        comp["license_source"] = source
+
+    enriched_license, license_url = enrich_license(comp)
+    if enriched_license:
+        comp["enriched_license"] = enriched_license
         comp["license_url"] = license_url
 
 merged = syft_components + scanoss_components
 
 # Create DataFrames
-df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license"])
+df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
 df_grype = pd.DataFrame(grype_components).drop_duplicates()
 df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
 
@@ -145,4 +148,4 @@ df_merged.to_json(json_out, orient="records", indent=2)
 df_grype.to_excel(grype_excel, index=False)
 df_scanoss.to_excel(scanoss_excel, index=False)
 
-print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")
+print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")s
