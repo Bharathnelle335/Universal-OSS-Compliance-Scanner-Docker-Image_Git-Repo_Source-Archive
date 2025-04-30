@@ -8,9 +8,9 @@ import re
 import os
 
 # Input arguments
-syft_file = sys.argv[1]
-grype_file = sys.argv[2]
-scanoss_file = sys.argv[3]
+syft_file = "syft-sbom.spdx.json"
+grype_file = "grype-scan.json"
+scanoss_file = "scanoss-results.json"
 image_name = os.getenv("IMAGE_NAME", "image").replace(":", "_").replace("/", "_").replace("@", "_")
 
 # Output file names with Docker image name prefix
@@ -20,7 +20,13 @@ grype_excel = f"{image_name}_grype_components_report.xlsx"
 scanoss_excel = f"{image_name}_scanoss_components_report.xlsx"
 syft_excel = f"{image_name}_syft_components_report.xlsx"
 
+syft_components = []
+grype_components = []
+scanoss_components = []
+
 def parse_syft(filepath):
+    if not os.path.exists(filepath):
+        return []
     with open(filepath, 'r') as f:
         data = json.load(f)
     components = []
@@ -40,6 +46,8 @@ def parse_syft(filepath):
     return components
 
 def parse_grype(filepath):
+    if not os.path.exists(filepath):
+        return defaultdict(str), []
     with open(filepath, 'r') as f:
         data = json.load(f)
     licenses = defaultdict(str)
@@ -65,6 +73,8 @@ def parse_grype(filepath):
     return licenses, grype_rows
 
 def parse_scanoss(filepath):
+    if not os.path.exists(filepath):
+        return []
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -141,16 +151,21 @@ for comp in syft_components:
 merged = syft_components + scanoss_components
 
 # Create DataFrames
-df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
-df_grype = pd.DataFrame(grype_components).drop_duplicates()
-df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
-df_syft = pd.DataFrame(syft_components)[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
+if merged:
+    df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
+    df_merged.to_excel(excel_out, index=False)
+    df_merged.to_json(json_out, orient="records", indent=2)
 
-# Export to files
-df_merged.to_excel(excel_out, index=False)
-df_merged.to_json(json_out, orient="records", indent=2)
-df_grype.to_excel(grype_excel, index=False)
-df_scanoss.to_excel(scanoss_excel, index=False)
-df_syft.to_excel(syft_excel, index=False)
+if grype_components:
+    df_grype = pd.DataFrame(grype_components).drop_duplicates()
+    df_grype.to_excel(grype_excel, index=False)
 
-print(f"✅ Exported reports with image name: {image_name}")
+if scanoss_components:
+    df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
+    df_scanoss.to_excel(scanoss_excel, index=False)
+
+if syft_components:
+    df_syft = pd.DataFrame(syft_components)[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
+    df_syft.to_excel(syft_excel, index=False)
+
+print(f"✅ Reports generated for: {image_name}")
