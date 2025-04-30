@@ -4,7 +4,6 @@ import pandas as pd
 from collections import defaultdict
 import requests
 import time
-import re
 import os
 
 # Determine scan source identifier (docker image or git URL or tar/zip upload)
@@ -21,10 +20,6 @@ json_out = f"{image_name}_compliance_merged_report.json"
 grype_excel = f"{image_name}_grype_components_report.xlsx"
 scanoss_excel = f"{image_name}_scanoss_components_report.xlsx"
 syft_excel = f"{image_name}_syft_components_report.xlsx"
-
-syft_components = []
-grype_components = []
-scanoss_components = []
 
 def parse_syft(filepath):
     if not os.path.exists(filepath):
@@ -77,7 +72,6 @@ def parse_grype(filepath):
 def parse_scanoss(filepath):
     if not os.path.exists(filepath):
         return []
-
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -86,26 +80,26 @@ def parse_scanoss(filepath):
         for entry_list in data.values():
             for match in entry_list:
                 component = match.get("component")
+                version = match.get("version") or match.get("latest")
                 license_objs = match.get("licenses", [])
                 license_names = [lic.get("name") for lic in license_objs if "name" in lic]
                 license_combined = ", ".join(license_names) if license_names else None
+                license_url = license_objs[0].get("url") if license_objs and "url" in license_objs[0] else "unknown"
 
-                if component and license_combined:
+                if component:
                     matched.append({
                         "component": component,
-                        "version": match.get("version") or None,
+                        "version": version,
                         "source": "scanoss",
                         "license": license_combined,
                         "license_source": "scanoss",
                         "enriched_license": None,
-                        "license_url": match.get("url") or "unknown"
+                        "license_url": license_url
                     })
-
         return matched
     except Exception as e:
         print(f"[ERROR] Failed to parse SCANOSS JSON: {e}")
         return []
-
 
 def enrich_license(component):
     name = component["component"]
@@ -143,41 +137,42 @@ def enrich_license(component):
 
     return None, "unknown"
 
+# Parse all inputs
 syft_components = parse_syft(syft_file)
 grype_licenses, grype_components = parse_grype(grype_file)
 scanoss_components = parse_scanoss(scanoss_file)
 
+# Enrich syft components using Grype and external data
 for comp in syft_components:
     key = f"{comp['component']}@{comp['version']}"
     if not comp["license"] and key in grype_licenses:
         comp["license"] = grype_licenses[key]
         comp["license_source"] = "grype"
-
     enriched_license, license_url = enrich_license(comp)
     if enriched_license:
         comp["enriched_license"] = enriched_license
         comp["license_url"] = license_url
 
+# Combine syft and scanoss for merged report
 merged = syft_components + scanoss_components
+df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
+df_merged.to_excel(excel_out, index=False)
+df_merged.to_json(json_out, orient="records", indent=2)
 
-if merged:
-    df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
-    df_merged.to_excel(excel_out, index=False)
-    df_merged.to_json(json_out, orient="records", indent=2)
+# Grype
+df_grype = pd.DataFrame(grype_components).drop_duplicates()
+df_grype.to_excel(grype_excel, index=False)
 
-if grype_components:
-    df_grype = pd.DataFrame(grype_components).drop_duplicates()
-    df_grype.to_excel(grype_excel, index=False)
-
-if scanoss_components:
-    df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
-else:
-    df_scanoss = pd.DataFrame(columns=["component", "version", "license", "license_source", "enriched_license", "license_url"])
-
+# Scanoss
+df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
 df_scanoss.to_excel(scanoss_excel, index=False)
 
-if syft_components:
-    df_syft = pd.DataFrame(syft_components)[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
-    df_syft.to_excel(syft_excel, index=False)
+# Syft
+df_syft = pd.DataFrame(syft_components)
+if not df_syft.empty:
+    df_syft = df_syft[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
+else:
+    df_syft = pd.DataFrame(columns=["component", "version", "license", "license_source", "license_url"])
+df_syft.to_excel(syft_excel, index=False)
 
 print(f"✅ Reports generated for: {image_name}")
