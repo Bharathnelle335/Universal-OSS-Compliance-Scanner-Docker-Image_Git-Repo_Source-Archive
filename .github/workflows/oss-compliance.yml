@@ -82,14 +82,19 @@ jobs:
         if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
         run: |
           mkdir uploaded-source
-          unzip source.zip -d uploaded-source
+          unzip *.zip -d uploaded-source
 
       - name: Extract uploaded image.tar archive
         if: ${{ github.event.inputs.scan_type == 'upload-tar' }}
         run: |
-          mkdir -p docker-output/extracted-rootfs
-          tar -xf image.tar -C docker-output
-          find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
+          mkdir -p uploaded-tar
+          file=$(find . -maxdepth 1 -type f \( -iname "*.tar" -o -iname "*.tar.gz" -o -iname "*.tgz" \) | head -n 1)
+          if [ -z "$file" ]; then
+            echo "❌ No .tar or .tar.gz archive found."
+            exit 1
+          fi
+          echo "📦 Extracting $file to uploaded-tar/"
+          tar -xf "$file" -C uploaded-tar
 
       - name: Run SCANOSS scan (Docker)
         if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'docker' }}
