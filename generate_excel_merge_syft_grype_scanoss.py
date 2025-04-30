@@ -5,6 +5,7 @@ from collections import defaultdict
 import requests
 import time
 import re
+import os
 
 # Input arguments
 syft_file = sys.argv[1]
