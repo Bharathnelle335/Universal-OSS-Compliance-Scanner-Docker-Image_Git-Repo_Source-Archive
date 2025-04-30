@@ -27,7 +27,8 @@ def parse_syft(filepath):
             "version": version,
             "source": "syft",
             "license": license,
-            "license_source": "syft" if license else ""
+            "license_source": "syft" if license else "",
+            "license_url": "unknown"
         })
     return components
 
@@ -50,7 +51,8 @@ def parse_grype(filepath):
                 "version": version,
                 "source": "grype",
                 "license": license,
-                "license_source": "grype"
+                "license_source": "grype",
+                "license_url": "unknown"
             })
     return licenses, grype_rows
 
@@ -69,7 +71,8 @@ def parse_scanoss(filepath):
                         "version": None,
                         "source": "scanoss",
                         "license": license,
-                        "license_source": "scanoss"
+                        "license_source": "scanoss",
+                        "license_url": "unknown"
                     })
         return matched
     except Exception:
@@ -87,7 +90,7 @@ def enrich_license(component):
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
             data = r.json()
-            return data.get("license", {}).get("spdx_id"), "github"
+            return data.get("license", {}).get("spdx_id"), "github", url
     except: pass
 
     # Try NPM
@@ -98,7 +101,7 @@ def enrich_license(component):
         if r.status_code == 200:
             data = r.json()
             license = data.get("license")
-            return license, "npm"
+            return license, "npm", url
     except: pass
 
     # Try PyPI
@@ -109,10 +112,10 @@ def enrich_license(component):
         if r.status_code == 200:
             data = r.json()
             license = data.get("info", {}).get("license")
-            return license, "pypi"
+            return license, "pypi", url
     except: pass
 
-    return None, "unknown"
+    return None, "unknown", "unknown"
 
 syft_components = parse_syft(syft_file)
 grype_licenses, grype_components = parse_grype(grype_file)
@@ -124,9 +127,10 @@ for comp in syft_components:
         comp["license"] = grype_licenses[key]
         comp["license_source"] = "grype"
     if not comp["license"]:
-        license, source = enrich_license(comp)
+        license, source, license_url = enrich_license(comp)
         comp["license"] = license
         comp["license_source"] = source
+        comp["license_url"] = license_url
 
 merged = syft_components + scanoss_components
 
