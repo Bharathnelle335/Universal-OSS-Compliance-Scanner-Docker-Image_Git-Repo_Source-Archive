@@ -10,7 +10,7 @@ import re
 syft_file = sys.argv[1]
 grype_file = sys.argv[2]
 scanoss_file = sys.argv[3]
-image_name = sys.argv[4].replace(':', '_').replace('/', '_').replace('@', '_')  # Simplified and safe
+image_name = os.getenv("IMAGE_NAME", "image").replace(":", "_").replace("/", "_").replace("@", "_")
 
 # Output file names with Docker image name prefix
 excel_out = f"{image_name}_compliance_merged_report.xlsx"
