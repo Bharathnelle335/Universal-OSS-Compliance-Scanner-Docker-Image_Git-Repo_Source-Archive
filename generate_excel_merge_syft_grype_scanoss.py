@@ -4,16 +4,18 @@ import pandas as pd
 from collections import defaultdict
 import requests
 import time
+import re
 
 syft_file = sys.argv[1]
 grype_file = sys.argv[2]
 scanoss_file = sys.argv[3]
+image_name = re.sub(r'[^a-zA-Z0-9]+', '_', sys.argv[4]).strip('_')  # sanitize for file use
 
-excel_out = "compliance_merged_report.xlsx"
-json_out = "compliance_merged_report.json"
-grype_excel = "grype_components_report.xlsx"
-scanoss_excel = "scanoss_components_report.xlsx"
-syft_excel = "syft_components_report.xlsx"
+excel_out = f"{image_name}_compliance_merged_report.xlsx"
+json_out = f"{image_name}_compliance_merged_report.json"
+grype_excel = f"{image_name}_grype_components_report.xlsx"
+scanoss_excel = f"{image_name}_scanoss_components_report.xlsx"
+syft_excel = f"{image_name}_syft_components_report.xlsx"
 
 def parse_syft(filepath):
     with open(filepath, 'r') as f:
@@ -87,7 +89,6 @@ def enrich_license(component):
     version = component["version"] or ""
     headers = {"Accept": "application/json"}
 
-    # Try GitHub
     try:
         time.sleep(0.2)
         url = f"https://api.github.com/repos/{name}/license"
@@ -97,7 +98,6 @@ def enrich_license(component):
             return data.get("license", {}).get("spdx_id"), url
     except: pass
 
-    # Try NPM
     try:
         time.sleep(0.2)
         url = f"https://registry.npmjs.org/{name}"
@@ -108,7 +108,6 @@ def enrich_license(component):
             return license, url
     except: pass
 
-    # Try PyPI
     try:
         time.sleep(0.2)
         url = f"https://pypi.org/pypi/{name}/json"
@@ -151,4 +150,4 @@ df_grype.to_excel(grype_excel, index=False)
 df_scanoss.to_excel(scanoss_excel, index=False)
 df_syft.to_excel(syft_excel, index=False)
 
-print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}, {syft_excel}")
+print(f"✅ Exported reports with image name: {image_name}")
