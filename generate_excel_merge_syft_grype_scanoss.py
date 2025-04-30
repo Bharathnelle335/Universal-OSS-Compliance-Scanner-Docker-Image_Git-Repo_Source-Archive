@@ -14,7 +14,6 @@ json_out = "compliance_merged_report.json"
 grype_excel = "grype_components_report.xlsx"
 scanoss_excel = "scanoss_components_report.xlsx"
 
-
 def parse_syft(filepath):
     with open(filepath, 'r') as f:
         data = json.load(f)
@@ -22,12 +21,13 @@ def parse_syft(filepath):
     for item in data.get("packages", []):
         name = item.get("name")
         version = item.get("versionInfo") or item.get("version")
+        license = item.get("licenseDeclared")
         components.append({
             "component": name,
             "version": version,
             "source": "syft",
-            "license": None,
-            "license_source": ""
+            "license": license,
+            "license_source": "syft" if license else ""
         })
     return components
 
@@ -40,7 +40,8 @@ def parse_grype(filepath):
         pkg = match.get("artifact", {})
         name = pkg.get("name")
         version = pkg.get("version")
-        license = pkg.get("license") or match.get("vulnerability", {}).get("license")
+        license_list = match.get("licenses", [])
+        license = license_list[0].get("spdx") if license_list else pkg.get("license")
         if name and version:
             key = f"{name}@{version}"
             licenses[key] = license
@@ -79,7 +80,7 @@ def enrich_license(component):
     version = component["version"] or ""
     headers = {"Accept": "application/json"}
 
-    # Try GitHub (placeholder - assumes repo naming)
+    # Try GitHub
     try:
         time.sleep(0.2)
         url = f"https://api.github.com/repos/{name}/license"
@@ -113,23 +114,20 @@ def enrich_license(component):
 
     return None, "unknown"
 
-# Parse inputs
 syft_components = parse_syft(syft_file)
 grype_licenses, grype_components = parse_grype(grype_file)
 scanoss_components = parse_scanoss(scanoss_file)
 
-# Enrich syft with Grype license and fallback online
 for comp in syft_components:
     key = f"{comp['component']}@{comp['version']}"
-    if key in grype_licenses:
+    if not comp["license"] and key in grype_licenses:
         comp["license"] = grype_licenses[key]
         comp["license_source"] = "grype"
-    else:
+    if not comp["license"]:
         license, source = enrich_license(comp)
         comp["license"] = license
         comp["license_source"] = source
 
-# Merge reports
 merged = syft_components + scanoss_components
 
 # Create DataFrames
