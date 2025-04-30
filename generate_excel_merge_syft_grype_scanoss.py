@@ -13,6 +13,7 @@ excel_out = "compliance_merged_report.xlsx"
 json_out = "compliance_merged_report.json"
 grype_excel = "grype_components_report.xlsx"
 scanoss_excel = "scanoss_components_report.xlsx"
+syft_excel = "syft_components_report.xlsx"
 
 def parse_syft(filepath):
     with open(filepath, 'r') as f:
@@ -141,11 +142,13 @@ merged = syft_components + scanoss_components
 df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
 df_grype = pd.DataFrame(grype_components).drop_duplicates()
 df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
+df_syft = pd.DataFrame(syft_components)[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
 
 # Export to files
 df_merged.to_excel(excel_out, index=False)
 df_merged.to_json(json_out, orient="records", indent=2)
 df_grype.to_excel(grype_excel, index=False)
 df_scanoss.to_excel(scanoss_excel, index=False)
+df_syft.to_excel(syft_excel, index=False)
 
-print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}")
+print(f"✅ Exported: {excel_out}, {json_out}, {grype_excel}, {scanoss_excel}, {syft_excel}")
