@@ -2,17 +2,18 @@ import sys
 import json
 import pandas as pd
 from collections import defaultdict
+import requests
+import time
 
-# Input files from CLI
 syft_file = sys.argv[1]
 grype_file = sys.argv[2]
 scanoss_file = sys.argv[3]
 
-# Output file names
 excel_out = "compliance_merged_report.xlsx"
 json_out = "compliance_merged_report.json"
 grype_excel = "grype_components_report.xlsx"
 scanoss_excel = "scanoss_components_report.xlsx"
+
 
 def parse_syft(filepath):
     with open(filepath, 'r') as f:
@@ -25,7 +26,8 @@ def parse_syft(filepath):
             "component": name,
             "version": version,
             "source": "syft",
-            "license": None
+            "license": None,
+            "license_source": ""
         })
     return components
 
@@ -46,7 +48,8 @@ def parse_grype(filepath):
                 "component": name,
                 "version": version,
                 "source": "grype",
-                "license": license
+                "license": license,
+                "license_source": "grype"
             })
     return licenses, grype_rows
 
@@ -64,21 +67,69 @@ def parse_scanoss(filepath):
                         "component": component,
                         "version": None,
                         "source": "scanoss",
-                        "license": license
+                        "license": license,
+                        "license_source": "scanoss"
                     })
         return matched
     except Exception:
         return []
 
+def enrich_license(component):
+    name = component["component"]
+    version = component["version"] or ""
+    headers = {"Accept": "application/json"}
+
+    # Try GitHub (placeholder - assumes repo naming)
+    try:
+        time.sleep(0.2)
+        url = f"https://api.github.com/repos/{name}/license"
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("license", {}).get("spdx_id"), "github"
+    except: pass
+
+    # Try NPM
+    try:
+        time.sleep(0.2)
+        url = f"https://registry.npmjs.org/{name}"
+        r = requests.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            license = data.get("license")
+            return license, "npm"
+    except: pass
+
+    # Try PyPI
+    try:
+        time.sleep(0.2)
+        url = f"https://pypi.org/pypi/{name}/json"
+        r = requests.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            license = data.get("info", {}).get("license")
+            return license, "pypi"
+    except: pass
+
+    return None, "unknown"
+
+# Parse inputs
 syft_components = parse_syft(syft_file)
 grype_licenses, grype_components = parse_grype(grype_file)
 scanoss_components = parse_scanoss(scanoss_file)
 
+# Enrich syft with Grype license and fallback online
 for comp in syft_components:
     key = f"{comp['component']}@{comp['version']}"
-    comp["license"] = grype_licenses.get(key)
+    if key in grype_licenses:
+        comp["license"] = grype_licenses[key]
+        comp["license_source"] = "grype"
+    else:
+        license, source = enrich_license(comp)
+        comp["license"] = license
+        comp["license_source"] = source
 
-# Merge for final report
+# Merge reports
 merged = syft_components + scanoss_components
 
 # Create DataFrames
