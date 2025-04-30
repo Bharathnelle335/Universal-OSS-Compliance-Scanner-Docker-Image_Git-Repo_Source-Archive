@@ -1,12 +1,25 @@
-name: Docker OSS Compliance (Syft + Grype + SCANOSS)
+name: Docker or Git OSS Compliance (Syft + Grype + SCANOSS)
 
 on:
   workflow_dispatch:
     inputs:
-      docker_image:
-        description: 'Docker image to scan (e.g., nginx:latest)'
+      scan_type:
+        description: 'What do you want to scan?'
         required: true
-        default: 'nginx:latest'
+        default: 'docker'
+        type: choice
+        options:
+          - docker
+          - git
+
+      docker_image:
+        description: 'Docker image (e.g., nginx:latest)'
+        required: false
+
+      git_url:
+        description: 'Git repo URL (e.g., https://github.com/user/repo)'
+        required: false
+
       enable_syft:
         description: 'Run Syft SBOM?'
         required: false
@@ -24,7 +37,7 @@ on:
         type: boolean
 
 jobs:
-  docker-compliance:
+  oss-compliance:
     runs-on: ubuntu-latest
 
     steps:
@@ -45,36 +58,55 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Pull Docker image
+        if: ${{ github.event.inputs.scan_type == 'docker' }}
         run: docker pull ${{ github.event.inputs.docker_image }}
 
       - name: Save and extract Docker image filesystem
+        if: ${{ github.event.inputs.scan_type == 'docker' }}
         run: |
           mkdir -p docker-output/extracted-rootfs
           docker save ${{ github.event.inputs.docker_image }} -o docker-output/image.tar
           tar -xf docker-output/image.tar -C docker-output
           find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
 
-      - name: Run SCANOSS on image filesystem
-        if: ${{ github.event.inputs.enable_scanoss == 'true' }}
+      - name: Clone Git repository
+        if: ${{ github.event.inputs.scan_type == 'git' }}
+        run: |
+          git clone --depth 1 ${{ github.event.inputs.git_url }} repo-to-scan
+
+      - name: Run SCANOSS
+        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'docker' }}
         run: python3 -m scanoss.cli scan -o scanoss-results.json docker-output/extracted-rootfs
 
-      - name: Generate SBOM with Syft
-        if: ${{ github.event.inputs.enable_syft == 'true' }}
+      - name: Run SCANOSS on Git repo
+        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'git' }}
+        run: python3 -m scanoss.cli scan -o scanoss-results.json repo-to-scan
+
+      - name: Generate SBOM with Syft (Docker)
+        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'docker' }}
         run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
 
-      - name: Run Grype scan
-        if: ${{ github.event.inputs.enable_grype == 'true' }}
+      - name: Generate SBOM with Syft (Git)
+        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'git' }}
+        run: syft dir:repo-to-scan -o spdx-json > syft-sbom.spdx.json
+
+      - name: Run Grype scan (Docker)
+        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'docker' }}
         run: grype ${{ github.event.inputs.docker_image }} -o json > grype-scan.json
+
+      - name: Run Grype scan (Git)
+        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'git' }}
+        run: grype dir:repo-to-scan -o json > grype-scan.json
 
       - name: Merge outputs and generate Excel report
         run: python3 generate_excel_merge_syft_grype_scanoss.py
         env:
-          IMAGE_NAME: ${{ github.event.inputs.docker_image }}
+          IMAGE_NAME: ${{ github.event.inputs.docker_image || github.event.inputs.git_url }}
 
       - name: Upload Compliance Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: docker-oss-results
+          name: oss-scan-results
           path: |
             *_compliance_merged_report.xlsx
             *_compliance_merged_report.json

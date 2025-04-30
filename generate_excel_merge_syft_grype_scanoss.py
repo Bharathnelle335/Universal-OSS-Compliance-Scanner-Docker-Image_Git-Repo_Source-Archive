@@ -7,13 +7,15 @@ import time
 import re
 import os
 
-# Input arguments
+# Determine scan source identifier (docker image or git URL)
+image_name = os.getenv("IMAGE_NAME", "scan").replace(":", "_").replace("/", "_").replace("@", "_")
+
+# File names
 syft_file = "syft-sbom.spdx.json"
 grype_file = "grype-scan.json"
 scanoss_file = "scanoss-results.json"
-image_name = os.getenv("IMAGE_NAME", "image").replace(":", "_").replace("/", "_").replace("@", "_")
 
-# Output file names with Docker image name prefix
+# Output file names
 excel_out = f"{image_name}_compliance_merged_report.xlsx"
 json_out = f"{image_name}_compliance_merged_report.json"
 grype_excel = f"{image_name}_grype_components_report.xlsx"
@@ -150,7 +152,6 @@ for comp in syft_components:
 
 merged = syft_components + scanoss_components
 
-# Create DataFrames
 if merged:
     df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
     df_merged.to_excel(excel_out, index=False)
