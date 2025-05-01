@@ -102,11 +102,9 @@ jobs:
           echo "📦 Extracting $file to uploaded-tar/"
           tar -xf "$file" -C uploaded-tar
 
-      - name: Download and extract ORT CLI
+      - name: Download ORT CLI (JAR)
         run: |
-          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/57.0.0/orth-57.0.0.zip
-          unzip ort.zip -d ort-cli
-          chmod +x ort-cli/orth-57.0.0/bin/orth
+          curl -L --fail --retry 3 -o ort.jar https://github.com/oss-review-toolkit/ort/releases/download/v57.0.0/ort-57.0.0.jar
 
       - name: Set up Java 21 (required for ORT)
         uses: actions/setup-java@v4
@@ -123,13 +121,11 @@ jobs:
           elif [ "$SCAN_TYPE" == "git" ]; then scan_path="repo-to-scan"; fi
 
           mkdir -p ort-output
-          chmod +x ort-cli/orth-57.0.0/bin/orth
-          ort-cli/orth-57.0.0/bin/orth run --input-dir "$scan_path" --output-dir ort-output
+          java -jar ort.jar run --input-dir "$scan_path" --output-dir ort-output
 
       - name: Zip ORT output folder
         if: ${{ github.event.inputs.enable_ort == 'true' }}
-        run: |
-          zip -r ort-output.zip ort-output
+        run: zip -r ort-output.zip ort-output
 
       - name: Run SCANOSS scan (Docker)
         if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'docker' }}
