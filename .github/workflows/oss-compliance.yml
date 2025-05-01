@@ -102,9 +102,20 @@ jobs:
           echo "📦 Extracting $file to uploaded-tar/"
           tar -xf "$file" -C uploaded-tar
 
-      - name: Download ORT CLI (JAR)
+      - name: Download and extract ORT CLI
         run: |
-          curl -L --fail --retry 3 -o ort.jar https://github.com/oss-review-toolkit/ort/releases/download/v12.3.0/ort-cli-12.3.0.jar
+          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/57.0.0/orth-57.0.0.zip
+          unzip ort.zip -d ort-cli
+          chmod +x ort-cli/ort
+
+      - name: Run ORT (OSS Review Toolkit)
+        run: |
+          if [ "${{ github.event.inputs.scan_type }}" == "docker" ] || [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="docker-output/extracted-rootfs"; \
+          elif [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source"; \
+          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
+
+          mkdir ort-output
+          ./ort-cli/ort analyze -i "$scan_path" -o ort-output
 
       - name: Run ORT (OSS Review Toolkit)
         if: ${{ github.event.inputs.enable_ort == 'true' }}
