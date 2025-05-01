@@ -108,6 +108,12 @@ jobs:
           unzip ort.zip -d ort-cli
           chmod +x ort-cli/orth-57.0.0/bin/orth
 
+      - name: Set up Java 21 (required for ORT)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Run ORT (OSS Review Toolkit)
         if: ${{ github.event.inputs.enable_ort == 'true' }}
         run: |
