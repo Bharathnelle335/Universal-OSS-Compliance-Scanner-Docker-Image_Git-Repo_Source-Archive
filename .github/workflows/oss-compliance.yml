@@ -124,7 +124,7 @@ jobs:
 
           mkdir -p ort-output
           chmod +x ort-cli/orth-57.0.0/bin/orth
-          ort-cli/orth-57.0.0/bin/orth analyzer run --input-dir "$scan_path" --output-dir ort-output
+          ort-cli/orth-57.0.0/bin/orth run --input-dir "$scan_path" --output-dir ort-output
 
       - name: Zip ORT output folder
         if: ${{ github.event.inputs.enable_ort == 'true' }}
