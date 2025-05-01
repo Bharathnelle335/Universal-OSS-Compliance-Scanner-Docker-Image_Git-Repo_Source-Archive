@@ -104,7 +104,9 @@ jobs:
 
       - name: Download ORT CLI (JAR)
         run: |
-          curl -sSLo ort.jar https://github.com/oss-review-toolkit/ort/releases/latest/download/ort-cli.jar
+          curl -L --fail --retry 3 -o ort.jar https://github.com/oss-review-toolkit/ort/releases/latest/download/ort-cli.jar
+          ls -lh ort.jar
+          file ort.jar
 
       - name: Run ORT (OSS Review Toolkit)
         if: ${{ github.event.inputs.enable_ort == 'true' }}
