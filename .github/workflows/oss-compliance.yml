@@ -103,8 +103,8 @@ jobs:
           tar -xf "$file" -C uploaded-tar
 
       - name: Download ORT CLI (JAR)
-        if: ${{ github.event.inputs.enable_ort == 'true' }}
-        run: curl -L https://github.com/oss-review-toolkit/ort/releases/latest/download/ort.jar -o ort.jar
+        run: |
+          curl -sSLo ort.jar https://github.com/oss-review-toolkit/ort/releases/latest/download/ort-cli.jar
 
       - name: Run ORT (OSS Review Toolkit)
         if: ${{ github.event.inputs.enable_ort == 'true' }}
