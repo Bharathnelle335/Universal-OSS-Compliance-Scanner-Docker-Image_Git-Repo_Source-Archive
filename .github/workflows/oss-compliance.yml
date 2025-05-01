@@ -106,7 +106,7 @@ jobs:
         run: |
           curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/57.0.0/orth-57.0.0.zip
           unzip ort.zip -d ort-cli
-          chmod +x ort-cli/ort
+          chmod +x ort-cli/orth-57.0.0/bin/orth
 
       - name: Run ORT (OSS Review Toolkit)
         run: |
