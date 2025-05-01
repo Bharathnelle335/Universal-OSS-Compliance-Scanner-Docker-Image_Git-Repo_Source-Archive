@@ -118,16 +118,6 @@ jobs:
           mkdir -p ort-output
           chmod +x ort-cli/orth-57.0.0/bin/orth
           ort-cli/orth-57.0.0/bin/ort analyze -i "$scan_path" -o ort-output
-      
-
-      - name: Run ORT (OSS Review Toolkit)
-        if: ${{ github.event.inputs.enable_ort == 'true' }}
-        run: |
-          if [ "${{ github.event.inputs.scan_type }}" == "docker" ] || [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="docker-output/extracted-rootfs"; \
-          elif [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source"; \
-          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
-          mkdir ort-output
-          java -jar ort.jar analyze -i "$scan_path" -o ort-output
 
       - name: Zip ORT output folder
         if: ${{ github.event.inputs.enable_ort == 'true' }}
