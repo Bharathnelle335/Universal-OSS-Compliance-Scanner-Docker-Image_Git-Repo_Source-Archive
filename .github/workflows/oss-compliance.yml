@@ -123,8 +123,16 @@ jobs:
           elif [ "$SCAN_TYPE" == "git" ]; then scan_path="repo-to-scan"; fi
 
           mkdir -p ort-output
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
-          ort-cli/ort-54.0.0/bin/ort report -i ort-output/analyzer -o ort-output/report
+          ort-cli/ort-54.0.0/bin/ort analyze \
+            -i "$scan_path" \
+            -o ort-output/analyzer \
+            --allow-dynamic-versions \
+            --stacktrace
+
+          ort-cli/ort-54.0.0/bin/ort report \
+            -i ort-output/analyzer \
+            -o ort-output/report \
+            --stacktrace
 
       - name: Zip ORT output folder
         if: ${{ github.event.inputs.enable_ort == 'true' }}
