@@ -1,47 +1,47 @@
-name: OSS Compliance - Docker, Git or Uploaded Source
+name: OSS Compliance - Docker, Upload, Git (Syft + Grype + SCANOSS + ORT)
 
 on:
   workflow_dispatch:
     inputs:
       scan_type:
-        description: 'Scan a Docker image, Git repo, uploaded source.zip or image.tar archive'
+        description: 'Select input type to scan'
         required: true
         default: 'docker'
         type: choice
         options:
           - docker
-          - git
           - upload-zip
           - upload-tar
+          - git
 
       docker_image:
-        description: 'Docker image name (e.g., nginx:latest) [scan_type: docker]'
+        description: 'Docker image name (e.g., nginx:latest)'
         required: false
 
       git_url:
-        description: 'Git repository URL (e.g., https://github.com/user/repo)'
+        description: 'Git URL to clone and scan'
         required: false
 
       enable_syft:
-        description: 'Run Syft SBOM?'
+        description: 'Enable Syft SBOM scan'
         required: false
         default: 'true'
         type: boolean
 
       enable_grype:
-        description: 'Run Grype vulnerability scan?'
+        description: 'Enable Grype vulnerability scan'
         required: false
         default: 'true'
         type: boolean
 
       enable_scanoss:
-        description: 'Run SCANOSS OSS scan?'
+        description: 'Enable SCANOSS OSS scan'
         required: false
         default: 'true'
         type: boolean
 
       enable_ort:
-        description: 'Run ORT (OSS Review Toolkit)?'
+        description: 'Enable ORT open source review'
         required: false
         default: 'true'
         type: boolean
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -59,7 +59,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install SCANOSS, Syft, Grype, and Excel dependencies
+      - name: Install CLI Tools and Python Packages
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install --user scanoss pandas openpyxl
@@ -67,11 +67,11 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Pull Docker image
+      - name: Pull Docker Image
         if: ${{ github.event.inputs.scan_type == 'docker' }}
         run: docker pull ${{ github.event.inputs.docker_image }}
 
-      - name: Save and extract Docker image filesystem
+      - name: Save and Extract Docker Image Filesystem
         if: ${{ github.event.inputs.scan_type == 'docker' }}
         run: |
           mkdir -p docker-output/extracted-rootfs
@@ -79,118 +79,69 @@ jobs:
           tar -xf docker-output/image.tar -C docker-output
           find docker-output -name 'layer.tar' -exec tar -xf {} -C docker-output/extracted-rootfs \;
 
-      - name: Clone Git repository
-        if: ${{ github.event.inputs.scan_type == 'git' }}
-        run: |
-          git clone --depth 1 ${{ github.event.inputs.git_url }} repo-to-scan
-
-      - name: Unzip uploaded source archive
-        if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
-        run: |
-          mkdir uploaded-source
-          unzip *.zip -d uploaded-source
-
       - name: Extract uploaded image.tar archive
         if: ${{ github.event.inputs.scan_type == 'upload-tar' }}
         run: |
-          mkdir -p uploaded-tar
+          mkdir -p docker-output/extracted-rootfs
           file=$(find . -maxdepth 1 -type f \( -iname "*.tar" -o -iname "*.tar.gz" -o -iname "*.tgz" \) | head -n 1)
           if [ -z "$file" ]; then
             echo "❌ No .tar or .tar.gz archive found."
             exit 1
           fi
-          echo "📦 Extracting $file to uploaded-tar/"
-          tar -xf "$file" -C uploaded-tar
+          echo "📦 Extracting $file"
+          tar -xf "$file" -C docker-output/extracted-rootfs
 
-      - name: Download and extract ORT CLI (v54.0.0)
+      - name: Extract uploaded ZIP source
+        if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
         run: |
-          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/54.0.0/ort-54.0.0.zip
-          unzip ort.zip -d ort-cli
-          chmod +x ort-cli/ort-54.0.0/bin/ort
+          mkdir -p uploaded-source
+          unzip "*.zip" -d uploaded-source
 
-      - name: Set up Java 21 (required for ORT)
-        uses: actions/setup-java@v4
+      - name: Clone Git Repository to Scan
+        if: ${{ github.event.inputs.scan_type == 'git' }}
+        run: |
+          git clone ${{ github.event.inputs.git_url }} repo-to-scan
+
+      - name: Run SCANOSS
+        if: ${{ github.event.inputs.enable_scanoss == 'true' }}
+        run: |
+          scan_path="repo-to-scan"
+          if [ "${{ github.event.inputs.scan_type }}" == "docker" ] || [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="docker-output/extracted-rootfs"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source"; fi
+          python3 -m scanoss.cli scan -o scanoss-results.json "$scan_path"
+
+      - name: Run Syft
+        if: ${{ github.event.inputs.enable_syft == 'true' }}
+        run: |
+          image_or_dir="${{ github.event.inputs.docker_image }}"
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then image_or_dir="dir:docker-output/extracted-rootfs"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then image_or_dir="dir:uploaded-source"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "git" ]; then image_or_dir="dir:repo-to-scan"; fi
+          syft "$image_or_dir" -o spdx-json > syft-sbom.spdx.json
+
+      - name: Run Grype
+        if: ${{ github.event.inputs.enable_grype == 'true' }}
+        run: |
+          image_or_dir="${{ github.event.inputs.docker_image }}"
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then image_or_dir="dir:docker-output/extracted-rootfs"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then image_or_dir="dir:uploaded-source"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "git" ]; then image_or_dir="dir:repo-to-scan"; fi
+          grype "$image_or_dir" -o json > grype-scan.json
+
+      - name: Run ORT using official GitHub Action
+        if: ${{ github.event.inputs.enable_ort == 'true' }}
+        uses: oss-review-toolkit/ort-ci-github-action@v1
         with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Run ORT (OSS Review Toolkit)
-        if: ${{ github.event.inputs.enable_ort == 'true' }}
-        run: |
-          SCAN_TYPE="${{ github.event.inputs.scan_type }}"
-          if [ "$SCAN_TYPE" == "docker" ] || [ "$SCAN_TYPE" == "upload-tar" ]; then scan_path="docker-output/extracted-rootfs";
-          elif [ "$SCAN_TYPE" == "upload-zip" ]; then scan_path="uploaded-source";
-          elif [ "$SCAN_TYPE" == "git" ]; then scan_path="repo-to-scan"; fi
-
-          mkdir -p ort-output
-          ort-cli/ort-54.0.0/bin/ort analyze \
-            -i "$scan_path" \
-            -o ort-output/analyzer \
-            --allow-dynamic-versions \
-            --stacktrace
-
-          ort-cli/ort-54.0.0/bin/ort report \
-            -i ort-output/analyzer \
-            -o ort-output/report \
-            --stacktrace
-
-      - name: Zip ORT output folder
-        if: ${{ github.event.inputs.enable_ort == 'true' }}
-        run: zip -r ort-output.zip ort-output
-
-
-      - name: Run SCANOSS scan (Docker)
-        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'docker' }}
-        run: python3 -m scanoss.cli scan -o scanoss-results.json docker-output/extracted-rootfs
-
-      - name: Run SCANOSS scan (Uploaded Source ZIP)
-        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'upload-zip' }}
-        run: python3 -m scanoss.cli scan -o scanoss-results.json uploaded-source
-
-      - name: Run SCANOSS scan (Uploaded Image TAR)
-        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'upload-tar' }}
-        run: python3 -m scanoss.cli scan -o scanoss-results.json docker-output/extracted-rootfs
-
-      - name: Run SCANOSS scan (Git)
-        if: ${{ github.event.inputs.enable_scanoss == 'true' && github.event.inputs.scan_type == 'git' }}
-        run: python3 -m scanoss.cli scan -o scanoss-results.json repo-to-scan
-
-      - name: Run Syft (Docker)
-        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'docker' }}
-        run: syft ${{ github.event.inputs.docker_image }} -o spdx-json > syft-sbom.spdx.json
-
-      - name: Run Syft (Uploaded Source ZIP)
-        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'upload-zip' }}
-        run: syft dir:uploaded-source -o spdx-json > syft-sbom.spdx.json
-
-      - name: Run Syft (Uploaded Image TAR)
-        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'upload-tar' }}
-        run: syft dir:docker-output/extracted-rootfs -o spdx-json > syft-sbom.spdx.json
-
-      - name: Run Syft (Git)
-        if: ${{ github.event.inputs.enable_syft == 'true' && github.event.inputs.scan_type == 'git' }}
-        run: syft dir:repo-to-scan -o spdx-json > syft-sbom.spdx.json
-
-      - name: Run Grype (Docker)
-        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'docker' }}
-        run: grype ${{ github.event.inputs.docker_image }} -o json > grype-scan.json
-
-      - name: Run Grype (Uploaded Source ZIP)
-        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'upload-zip' }}
-        run: grype dir:uploaded-source -o json > grype-scan.json
-
-      - name: Run Grype (Uploaded Image TAR)
-        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'upload-tar' }}
-        run: grype dir:docker-output/extracted-rootfs -o json > grype-scan.json
-
-      - name: Run Grype (Git)
-        if: ${{ github.event.inputs.enable_grype == 'true' && github.event.inputs.scan_type == 'git' }}
-        run: grype dir:repo-to-scan -o json > grype-scan.json
+          input-path: ${{ github.event.inputs.scan_type == 'docker' && 'docker-output/extracted-rootfs' || github.event.inputs.scan_type == 'upload-tar' && 'docker-output/extracted-rootfs' || github.event.inputs.scan_type == 'upload-zip' && 'uploaded-source' || github.event.inputs.scan_type == 'git' && 'repo-to-scan' }}
+          output-dir: ort-output
+          run-command: |
+            analyze -f JSON
+            report -f Excel
 
       - name: Merge outputs and generate Excel report
         run: python3 generate_excel_merge_syft_grype_scanoss.py
         env:
-          IMAGE_NAME: ${{ github.event.inputs.docker_image || github.event.inputs.git_url || 'upload' }}
+          IMAGE_NAME: ${{ github.event.inputs.docker_image || 'upload' }}
 
       - name: Upload Compliance Artifacts
         uses: actions/upload-artifact@v4
@@ -206,4 +157,3 @@ jobs:
             scanoss-results.json
             ort-output/
             ort-output.zip
-
