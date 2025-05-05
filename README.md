@@ -27,3 +27,7 @@ Trigger the GitHub Actions workflow:
 - Provide the matching input value or upload
 
 Results are uploaded as downloadable workflow artifacts.
+
+## License
+This project is licensed under the Apache License 2.0.  
+See the [LICENSE](./LICENSE) file for details.
