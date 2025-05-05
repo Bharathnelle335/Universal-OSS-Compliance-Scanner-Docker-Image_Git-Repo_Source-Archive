@@ -4,6 +4,7 @@ This project performs OSS compliance scanning for:
 - Docker images
 - Git repositories
 - Uploaded source archives (.zip or .tar.gz)
+![docker-image-scan-syft-grype-scanoss Flow Image](https://github.com/user-attachments/assets/aa5c6d4d-7581-4efa-91f8-2652d019a6cf)
 
 ## Tools Used
 - Syft → SBOM generation (SPDX/JSON)
